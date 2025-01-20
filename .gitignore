@@ -1,4 +1,11 @@
-__pycache__/
-*.pyc
-*.pyo
+# Ignore virtual environment folder
 env/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+
+# Ignore IDE/editor settings
+.vscode/
+*.idea/
