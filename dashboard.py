@@ -39,6 +39,10 @@ if data is not None:
     st.title("🎵 Cultural Evolution of Popularity Dashboard")
     st.subheader("Streams/Views Over Time by Platform")
 
+    # Debug: Check if raw data is loaded
+    st.write("Raw Data Sample:", data.head())
+    st.write("Raw Data Shape:", data.shape)
+
     # Filter data for years 2014–2024
     features = ['Spotify.Streams', 'YouTube.Views', 'TikTok.Views', 'Pandora.Streams']
     temp_data = data[(data['Year'] >= 2014) & (data['Year'] <= 2024)].copy()
@@ -47,12 +51,20 @@ if data is not None:
     for feature in features:
         temp_data[feature] = temp_data[feature].replace(-1, pd.NA)
 
+    # Debug: Check the filtered data
+    st.write("Filtered Data Sample:", temp_data.head())
+    st.write("Filtered Data Shape:", temp_data.shape)
+
     # Prepare grouped data for plotting
     plot_data = []
     for feature in features:
         # Group explicit and non-explicit data by year, summing up streams/views
         explicit_grouped = temp_data[temp_data['Explicit.Track'] == 1].groupby('Year')[feature].sum()
         non_explicit_grouped = temp_data[temp_data['Explicit.Track'] == 0].groupby('Year')[feature].sum()
+
+        # Debug: Log grouped data
+        st.write(f"Explicit Data for {feature}:", explicit_grouped)
+        st.write(f"Non-Explicit Data for {feature}:", non_explicit_grouped)
 
         # Store results in a structured DataFrame for plotting
         plot_data.append(pd.DataFrame({
@@ -68,6 +80,10 @@ if data is not None:
 
     # Combine all platform data into one DataFrame
     combined_data = pd.concat(plot_data)
+
+    # Debug: Check the combined data for plotting
+    st.write("Combined Data for Plotting:", combined_data.head())
+    st.write("Combined Data Shape:", combined_data.shape)
 
     # Adjust Y-axis scaling
     combined_data.dropna(subset=['Streams/Views'], inplace=True)  # Ensure no NaN values remain
@@ -98,8 +114,8 @@ if data is not None:
     # Customize the x-axis and y-axis
     ax.set_xticks(range(2014, 2025))  # Ensure years from 2014 to 2024
     ax.set_xlim(2014, 2024)
-    ax.set_yticks(range(0, 70_000_000 + 5_000_000, 5_000_000))
-    ax.set_ylim(0, 70_000_000)
+    ax.set_yticks(range(0, int(max_value) + 500_000, 500_000))
+    ax.set_ylim(0, max_value + 500_000)
 
     # Add title, labels, and legend
     ax.set_title("Number of Views/Streams by Platform and Explicitness (2014–2024)", fontsize=16)
