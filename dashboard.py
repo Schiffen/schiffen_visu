@@ -11,7 +11,7 @@ st.set_page_config(
 
 @st.cache_data
 def get_cloned_data():
-    """Load and clone the dataset."""
+    """Load and clean the dataset."""
     DATA_URL = "https://raw.githubusercontent.com/Schiffen/schiffen_visu/main/data%20project.csv"
 
     response = requests.get(DATA_URL)
@@ -26,6 +26,11 @@ def get_cloned_data():
     cloned_data['Release.Date'] = pd.to_datetime(cloned_data['Release.Date'], errors='coerce')
     cloned_data['Year'] = cloned_data['Release.Date'].dt.year
 
+    # Convert relevant columns to numeric, coercing errors to NaN
+    features = ['Spotify.Streams', 'YouTube.Views', 'TikTok.Views', 'Pandora.Streams']
+    for feature in features:
+        cloned_data[feature] = pd.to_numeric(cloned_data[feature], errors='coerce')
+
     return cloned_data
 
 data = get_cloned_data()
@@ -38,11 +43,9 @@ if data is not None:
     features = ['Spotify.Streams', 'YouTube.Views', 'TikTok.Views', 'Pandora.Streams']
     temp_data = data[(data['Year'] >= 2014) & (data['Year'] <= 2024)].copy()
 
-    # Drop rows with -1 in the relevant features
+    # Drop rows with -1 or NaN in the relevant features
     for feature in features:
         temp_data = temp_data[temp_data[feature] != -1]
-
-    # Remove null values
     temp_data.dropna(subset=['Year', *features], inplace=True)
 
     # Calculate the maximum value for the y-axis
