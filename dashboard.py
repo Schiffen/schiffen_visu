@@ -43,7 +43,7 @@ if data is not None:
     features = ['Spotify.Streams', 'YouTube.Views', 'TikTok.Views', 'Pandora.Streams']
     temp_data = data[(data['Year'] >= 2014) & (data['Year'] <= 2024)].copy()
 
-    # Replace -1 with NaN and drop missing values for each feature separately
+    # Replace -1 with NaN and drop invalid values for each feature
     for feature in features:
         temp_data[feature] = temp_data[feature].replace(-1, pd.NA)
 
@@ -68,6 +68,10 @@ if data is not None:
 
     # Combine all platform data into one DataFrame
     combined_data = pd.concat(plot_data)
+
+    # Adjust Y-axis scaling
+    combined_data.dropna(subset=['Streams/Views'], inplace=True)  # Ensure no NaN values remain
+    max_value = combined_data['Streams/Views'].max()
 
     # Create the plot
     fig, ax = plt.subplots(figsize=(12, 8))
@@ -94,9 +98,8 @@ if data is not None:
     # Customize the x-axis and y-axis
     ax.set_xticks(range(2014, 2025))  # Ensure years from 2014 to 2024
     ax.set_xlim(2014, 2024)
-    max_value = combined_data['Streams/Views'].max()
-    ax.set_yticks(range(0, int(max_value) + 500_000, 500_000))
-    ax.set_ylim(0, max_value + 500_000)
+    ax.set_yticks(range(0, 70_000_000 + 5_000_000, 5_000_000))
+    ax.set_ylim(0, 70_000_000)
 
     # Add title, labels, and legend
     ax.set_title("Number of Views/Streams by Platform and Explicitness (2014–2024)", fontsize=16)
