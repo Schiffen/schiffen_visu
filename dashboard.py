@@ -34,16 +34,25 @@ if data is not None:
     st.title("🎵 Cultural Evolution of Popularity Dashboard")
     st.subheader("Streams/Views Over Time by Platform")
 
-    # Filter by years 2014–2024
-    data = data[(data['Year'] >= 2014) & (data['Year'] <= 2024)]
-
-    # Drop rows with -1 in relevant columns
+    # Filter by years 2014–2024 and relevant features
     features = ['Spotify.Streams', 'YouTube.Views', 'TikTok.Views', 'Pandora.Streams']
-    for feature in features:
-        data = data[data[feature] != -1]
+    temp_data = data[(data['Year'] >= 2014) & (data['Year'] <= 2024)].copy()
 
-    # Remove any remaining null values
-    data.dropna(inplace=True)
+    # Drop rows with -1 in the relevant features
+    for feature in features:
+        temp_data = temp_data[temp_data[feature] != -1]
+
+    # Remove null values
+    temp_data.dropna(subset=['Year', *features], inplace=True)
+
+    # Calculate the maximum value for the y-axis
+    max_value = 0
+    for feature in features:
+        max_value = max(
+            max_value,
+            temp_data[temp_data['Explicit.Track'] == 1].groupby('Year')[feature].sum().max(),
+            temp_data[temp_data['Explicit.Track'] == 0].groupby('Year')[feature].sum().max()
+        )
 
     # Prepare the plot
     fig, ax = plt.subplots(figsize=(12, 8))
@@ -54,19 +63,10 @@ if data is not None:
         'Pandora.Streams': 'orange'
     }
 
-    # Calculate the maximum value across all features for the Y-axis
-    max_value = 0
-    for feature in features:
-        max_feature_value = max(
-            data[data['Explicit.Track'] == 1].groupby('Year')[feature].sum().max(),
-            data[data['Explicit.Track'] == 0].groupby('Year')[feature].sum().max()
-        )
-        max_value = max(max_value, max_feature_value)
-
     for feature in features:
         # Group by year for explicit tracks
-        explicit_data = data[data['Explicit.Track'] == 1].groupby('Year')[feature].sum()
-        non_explicit_data = data[data['Explicit.Track'] == 0].groupby('Year')[feature].sum()
+        explicit_data = temp_data[temp_data['Explicit.Track'] == 1].groupby('Year')[feature].sum()
+        non_explicit_data = temp_data[temp_data['Explicit.Track'] == 0].groupby('Year')[feature].sum()
 
         # Plot explicit tracks
         ax.plot(
