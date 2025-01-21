@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from io import StringIO
 import requests
 
-# Set the page title and favicon
 st.set_page_config(
     page_title="Cultural Evolution of Popularity Dashboard",
     page_icon=":musical_note:"
@@ -55,6 +54,15 @@ if data is not None:
         'Pandora.Streams': 'orange'
     }
 
+    # Calculate the maximum value across all features for the Y-axis
+    max_value = 0
+    for feature in features:
+        max_feature_value = max(
+            data[data['Explicit.Track'] == 1].groupby('Year')[feature].sum().max(),
+            data[data['Explicit.Track'] == 0].groupby('Year')[feature].sum().max()
+        )
+        max_value = max(max_value, max_feature_value)
+
     for feature in features:
         # Group by year for explicit tracks
         explicit_data = data[data['Explicit.Track'] == 1].groupby('Year')[feature].sum()
@@ -77,7 +85,7 @@ if data is not None:
     ax.set_xlabel("Year", fontsize=12)
     ax.set_ylabel("Views/Streams", fontsize=12)
     ax.set_xticks(range(2014, 2025))  # Set x-axis ticks to show only 2014–2024
-    ax.set_yticks(range(0, int(data[features].max().max()), 500_000))  # Y-axis increments
+    ax.set_yticks(range(0, int(max_value) + 500_000, 500_000))  # Y-axis increments
     ax.legend(fontsize=10)
     ax.grid(True)
 
