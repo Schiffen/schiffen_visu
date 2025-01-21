@@ -1,146 +1,181 @@
-import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import numpy as np
 
-# Set page configuration
+# Page configuration
 st.set_page_config(
-    page_title="Cultural Evolution of Popularity Dashboard",
-    page_icon=":musical_note:",
+    page_title="Artist Popularity Analysis 2015-2023",
+    page_icon="🎵",
+    layout="wide"
 )
+
+# Title and description
+st.title("🎵 Artist Popularity Trends (2015-2023)")
+st.markdown("""
+This dashboard explores the popularity trends of top music artists from 2015 to 2023. 
+The analysis focuses on track scores and release patterns to understand artist performance over time.
+""")
 
 # Load and prepare data
-DATA_URL = "https://raw.githubusercontent.com/Schiffen/schiffen_visu/main/data%20project.csv"
+@st.cache_data
+def load_data():
+    df = pd.read_csv("data project.csv")
+    # Convert Release.Date to datetime
+    df['Release.Date'] = pd.to_datetime(df['Release.Date'])
+    # Extract year
+    df['Year'] = df['Release.Date'].dt.year
+    return df
 
-# Attempt to load the data
-try:
-    df = pd.read_csv(DATA_URL, encoding='utf-8')
-    st.write("Data loaded successfully!")
-except Exception as e:
-    st.error(f"Failed to load data from URL: {e}")
-    df = None
+df = load_data()
 
-# Verify the data was loaded
-if df is None:
-    st.stop()
-elif df.empty:
-    st.error("The dataset is empty.")
-    st.stop()
-else:
-    st.write("Data Sample:", df.head(10))
-
-# Ensure critical columns are present
-expected_columns = [
-    "Track", "Album.Name", "Artist", "Release.Date", "All.Time.Rank", "Track.Score",
-    "Spotify.Streams", "Spotify.Playlist.Count", "Spotify.Playlist.Reach", "Spotify.Popularity",
-    "YouTube.Views", "YouTube.Likes", "TikTok.Posts", "TikTok.Likes", "TikTok.Views",
-    "YouTube.Playlist.Reach", "Apple.Music.Playlist.Count", "AirPlay.Spins", "SiriusXM.Spins",
-    "Deezer.Playlist.Count", "Deezer.Playlist.Reach", "Amazon.Playlist.Count", "Pandora.Streams",
-    "Pandora.Track.Stations", "Soundcloud.Streams", "Shazam.Counts", "Explicit.Track"
+# List of artists to analyze
+ARTISTS = [
+    "Drake", "Taylor Swift", "Justin Bieber", "Miley Cyrus", 
+    "Dua Lipa", "Billie Eilish", "Bad Bunny", "The Weeknd", 
+    "Future", "Post Malone", "KAROL G"
 ]
-missing_columns = [col for col in expected_columns if col not in df.columns]
-if missing_columns:
-    st.error(f"Missing columns in dataset: {missing_columns}")
-    st.stop()
 
-# Ensure Release.Date is in datetime format
-df['Release.Date'] = pd.to_datetime(df['Release.Date'], errors='coerce')
-df.set_index('Release.Date', inplace=True)
-
-# Replace -1 with NaN in numeric columns
-numeric_cols = [
-    "Spotify.Streams", "YouTube.Views", "TikTok.Views", "Pandora.Streams"
+# Filter data for selected artists and years
+filtered_df = df[
+    (df['Artist'].isin(ARTISTS)) & 
+    (df['Year'] >= 2015) & 
+    (df['Year'] <= 2023)
 ]
-for col in numeric_cols:
-    if col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors='coerce').replace(-1, pd.NA)
-    else:
-        st.warning(f"Column {col} is missing from the dataset.")
 
-# Add aggregated column for other platforms
-other_platforms = ["AirPlay.Spins", "SiriusXM.Spins", "Pandora.Streams", "Deezer.Playlist.Reach", "Soundcloud.Streams"]
-if all(platform in df.columns for platform in other_platforms):
-    df["other"] = df[other_platforms].sum(axis=1)
-else:
-    st.warning(f"One or more columns in {other_platforms} are missing. 'other' column will be incomplete.")
+# Calculate yearly averages for each artist
+yearly_stats = filtered_df.groupby(['Artist', 'Year']).agg({
+    'Track.Score': 'mean',
+    'Track': 'count'  # Count of tracks per year
+}).reset_index()
 
-# Fill NaN values in Explicit.Track with 0 and convert to integer
-df["Explicit.Track"] = df["Explicit.Track"].fillna(0).astype(int)
+# Main visualization section
+st.header("Artist Performance Analysis")
 
-# Define columns for analysis
-analysis_columns = ["YouTube.Views", "Spotify.Streams", "TikTok.Views", "other"]
+# Create two columns for filters
+col1, col2 = st.columns(2)
 
-# Resample data to monthly sums
-explicit_data = df[df["Explicit.Track"] == 1].resample("MS").sum()
-non_explicit_data = df[df["Explicit.Track"] == 0].resample("MS").sum()
+with col1:
+    selected_artists = st.multiselect(
+        "Select Artists to Compare",
+        ARTISTS,
+        default=ARTISTS[:5]  # Default to first 5 artists
+    )
 
-# Calculate the number of songs in each month
-explicit_counts = df[df["Explicit.Track"] == 1].resample("MS").size()
-non_explicit_counts = df[df["Explicit.Track"] == 0].resample("MS").size()
+with col2:
+    selected_years = st.slider(
+        "Select Year Range",
+        min_value=2015,
+        max_value=2023,
+        value=(2015, 2023)
+    )
 
-# Apply a 6-month moving average
-explicit_smoothed = explicit_data[analysis_columns].rolling(window=6, center=True).mean()
-non_explicit_smoothed = non_explicit_data[analysis_columns].rolling(window=6, center=True).mean()
+# Filter based on selection
+plot_data = yearly_stats[
+    (yearly_stats['Artist'].isin(selected_artists)) &
+    (yearly_stats['Year'].between(selected_years[0], selected_years[1]))
+]
 
-# Create the plot using Plotly
-fig = go.Figure()
+# Create tabs for different visualizations
+tab1, tab2, tab3 = st.tabs(["Popularity Trends", "Release Patterns", "Comparative Analysis"])
 
-# Define line colors for the platforms
-colors = ["red", "green", "#4A90A4", "purple"]
+with tab1:
+    # Line chart for popularity trends
+    fig1 = px.line(
+        plot_data,
+        x='Year',
+        y='Track.Score',
+        color='Artist',
+        title='Artist Popularity Trends Over Time',
+        labels={'Track.Score': 'Average Track Score', 'Year': 'Year'},
+        line_shape='spline',
+        markers=True
+    )
+    
+    fig1.update_layout(
+        height=600,
+        template='plotly_white',
+        hovermode='x unified',
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01
+        )
+    )
+    
+    st.plotly_chart(fig1, use_container_width=True)
 
-# Add explicit and non-explicit data
-for i, col in enumerate(analysis_columns):
-    # Explicit line
-    fig.add_trace(go.Scatter(
-        x=explicit_smoothed.index,
-        y=explicit_smoothed[col],
-        mode="lines",
-        name=f"{col.replace('.', ' ')} (Explicit)",
-        line=dict(width=2.5, color=colors[i % len(colors)], dash="solid"),
-        hovertemplate="%{x}<br>Explicit Streams: %{y:,.0f}<extra></extra>",
-    ))
+with tab2:
+    # Stacked bar chart for number of releases
+    fig2 = px.bar(
+        plot_data,
+        x='Year',
+        y='Track',
+        color='Artist',
+        title='Number of Tracks Released per Year',
+        labels={'Track': 'Number of Tracks', 'Year': 'Year'},
+        barmode='stack'
+    )
+    
+    fig2.update_layout(
+        height=600,
+        template='plotly_white',
+        hovermode='x unified'
+    )
+    
+    st.plotly_chart(fig2, use_container_width=True)
 
-    # Add line thickness based on song counts
-    fig.add_trace(go.Scatter(
-        x=explicit_smoothed.index,
-        y=explicit_smoothed[col],
-        mode="lines",
-        name=f"{col.replace('.', ' ')} (Explicit Songs)",
-        line=dict(width=(explicit_counts / explicit_counts.max()) * 5, color=colors[i % len(colors)], dash="solid"),
-        hovertemplate="%{x}<br>Number of Explicit Songs: %{customdata}<extra></extra>",
-        customdata=explicit_counts.values
-    ))
+with tab3:
+    # Create a scatter plot with size representing number of tracks
+    fig3 = px.scatter(
+        plot_data,
+        x='Year',
+        y='Track.Score',
+        size='Track',
+        color='Artist',
+        title='Artist Performance Matrix',
+        labels={
+            'Track.Score': 'Average Track Score',
+            'Year': 'Year',
+            'Track': 'Number of Tracks Released'
+        }
+    )
+    
+    fig3.update_layout(
+        height=600,
+        template='plotly_white',
+        hovermode='closest'
+    )
+    
+    st.plotly_chart(fig3, use_container_width=True)
 
-    # Non-explicit line
-    fig.add_trace(go.Scatter(
-        x=non_explicit_smoothed.index,
-        y=non_explicit_smoothed[col],
-        mode="lines",
-        name=f"{col.replace('.', ' ')} (Non-Explicit)",
-        line=dict(width=2.5, color=colors[i % len(colors)], dash="dash"),
-        hovertemplate="%{x}<br>Non-Explicit Streams: %{y:,.0f}<extra></extra>",
-    ))
+# Summary statistics
+st.header("Artist Performance Summary")
+st.markdown("### Key Statistics")
 
-    # Add line thickness based on song counts
-    fig.add_trace(go.Scatter(
-        x=non_explicit_smoothed.index,
-        y=non_explicit_smoothed[col],
-        mode="lines",
-        name=f"{col.replace('.', ' ')} (Non-Explicit Songs)",
-        line=dict(width=(non_explicit_counts / non_explicit_counts.max()) * 5, color=colors[i % len(colors)], dash="dash"),
-        hovertemplate="%{x}<br>Number of Non-Explicit Songs: %{customdata}<extra></extra>",
-        customdata=non_explicit_counts.values
-    ))
+# Calculate summary statistics
+summary_stats = filtered_df.groupby('Artist').agg({
+    'Track.Score': ['mean', 'max', 'count']
+}).round(2)
 
-# Add title and labels
-fig.update_layout(
-    title="Streams by Platform and Explicitness (2015-2024)",
-    xaxis_title="Year",
-    yaxis_title="Streams and Views",
-    template="plotly_dark",
-    legend_title="Platforms",
-    hovermode="x unified",
-    xaxis=dict(range=["2015-01-01", "2024-12-31"])
+summary_stats.columns = ['Average Score', 'Peak Score', 'Total Tracks']
+summary_stats = summary_stats.sort_values('Average Score', ascending=False)
+
+# Display summary table
+st.dataframe(
+    summary_stats,
+    use_container_width=True,
+    hide_index=False
 )
 
-# Show the plot
-st.plotly_chart(fig)
+# Footer with data information
+st.markdown("---")
+st.markdown("""
+**Data Notes:**
+- Track scores range from 0 to 100, with 100 being the highest possible score
+- Analysis includes tracks released between 2015 and 2023
+- Some artists may have incomplete data for certain years
+""")
