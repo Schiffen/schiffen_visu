@@ -1,138 +1,129 @@
-import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-from io import StringIO
-import requests
+import plotly.graph_objects as go
 
-st.set_page_config(
-    page_title="Cultural Evolution of Popularity Dashboard",
-    page_icon=":musical_note:"
+# Load and prepare data
+DATA_URL = "https://raw.githubusercontent.com/Schiffen/schiffen_visu/main/data%20project.csv"
+
+# Load data directly from your GitHub repository
+try:
+    df = pd.read_csv(DATA_URL, encoding='utf-8')
+except Exception as e:
+    print(f"Error loading data: {e}")
+
+# Ensure column names match expected format
+expected_columns = [
+    "Track", "Album.Name", "Artist", "Release.Date", "All.Time.Rank", "Track.Score",
+    "Spotify.Streams", "Spotify.Playlist.Count", "Spotify.Playlist.Reach", "Spotify.Popularity",
+    "YouTube.Views", "YouTube.Likes", "TikTok.Posts", "TikTok.Likes", "TikTok.Views",
+    "YouTube.Playlist.Reach", "Apple.Music.Playlist.Count", "AirPlay.Spins", "SiriusXM.Spins",
+    "Deezer.Playlist.Count", "Deezer.Playlist.Reach", "Amazon.Playlist.Count", "Pandora.Streams",
+    "Pandora.Track.Stations", "Soundcloud.Streams", "Shazam.Counts", "Explicit.Track"
+]
+
+# Check for missing columns
+missing_columns = [col for col in expected_columns if col not in df.columns]
+if missing_columns:
+    print(f"Warning: Missing columns in dataset - {missing_columns}")
+
+# Ensure Release.Date is in datetime format
+df['Release.Date'] = pd.to_datetime(df['Release.Date'], errors='coerce')
+df.set_index('Release.Date', inplace=True)
+
+# Replace -1 with NaN for relevant columns
+numeric_cols = [
+    "Spotify.Streams", "YouTube.Views", "TikTok.Views", "Pandora.Streams"
+]
+for col in numeric_cols:
+    if col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce').replace(-1, pd.NA)
+    else:
+        print(f"Warning: Column {col} missing from dataset.")
+
+# Add aggregated column for other platforms
+other_platforms = ["AirPlay.Spins", "SiriusXM.Spins", "Pandora.Streams", "Deezer.Playlist.Reach", "Soundcloud.Streams"]
+if all(platform in df.columns for platform in other_platforms):
+    df["other"] = df[other_platforms].sum(axis=1)
+else:
+    print(f"Warning: One or more columns in {other_platforms} are missing. 'other' column will be incomplete.")
+
+# Fill NaN values in Explicit.Track with 0 and convert to integer
+df["Explicit.Track"] = df["Explicit.Track"].fillna(0).astype(int)
+
+# Define columns for analysis
+analysis_columns = ["YouTube.Views", "Spotify.Streams", "TikTok.Views", "other"]
+
+# Resample data to monthly sums
+explicit_data = df[df["Explicit.Track"] == 1].resample("MS").sum()
+non_explicit_data = df[df["Explicit.Track"] == 0].resample("MS").sum()
+
+# Calculate the number of songs in each month
+explicit_counts = df[df["Explicit.Track"] == 1].resample("MS").size()
+non_explicit_counts = df[df["Explicit.Track"] == 0].resample("MS").size()
+
+# Apply a 6-month moving average
+explicit_smoothed = explicit_data[analysis_columns].rolling(window=6, center=True).mean()
+non_explicit_smoothed = non_explicit_data[analysis_columns].rolling(window=6, center=True).mean()
+
+# Create the plot using Plotly
+fig = go.Figure()
+
+# Define line colors for the platforms
+colors = ["red", "green", "#4A90A4", "purple"]
+
+# Add explicit and non-explicit data
+for i, col in enumerate(analysis_columns):
+    # Explicit line
+    fig.add_trace(go.Scatter(
+        x=explicit_smoothed.index,
+        y=explicit_smoothed[col],
+        mode="lines",
+        name=f"{col.replace('.', ' ')} (Explicit)",
+        line=dict(width=2.5, color=colors[i % len(colors)], dash="solid"),
+        hovertemplate="%{x}<br>Explicit Streams: %{y:,.0f}<extra></extra>",
+    ))
+
+    # Add line thickness based on song counts
+    fig.add_trace(go.Scatter(
+        x=explicit_smoothed.index,
+        y=explicit_smoothed[col],
+        mode="lines",
+        name=f"{col.replace('.', ' ')} (Explicit Songs)",
+        line=dict(width=(explicit_counts / explicit_counts.max()) * 5, color=colors[i % len(colors)], dash="solid"),
+        hovertemplate="%{x}<br>Number of Explicit Songs: %{customdata}<extra></extra>",
+        customdata=explicit_counts.values
+    ))
+
+    # Non-explicit line
+    fig.add_trace(go.Scatter(
+        x=non_explicit_smoothed.index,
+        y=non_explicit_smoothed[col],
+        mode="lines",
+        name=f"{col.replace('.', ' ')} (Non-Explicit)",
+        line=dict(width=2.5, color=colors[i % len(colors)], dash="dash"),
+        hovertemplate="%{x}<br>Non-Explicit Streams: %{y:,.0f}<extra></extra>",
+    ))
+
+    # Add line thickness based on song counts
+    fig.add_trace(go.Scatter(
+        x=non_explicit_smoothed.index,
+        y=non_explicit_smoothed[col],
+        mode="lines",
+        name=f"{col.replace('.', ' ')} (Non-Explicit Songs)",
+        line=dict(width=(non_explicit_counts / non_explicit_counts.max()) * 5, color=colors[i % len(colors)], dash="dash"),
+        hovertemplate="%{x}<br>Number of Non-Explicit Songs: %{customdata}<extra></extra>",
+        customdata=non_explicit_counts.values
+    ))
+
+# Add title and labels
+fig.update_layout(
+    title="Streams by Platform and Explicitness (2015-2024)",
+    xaxis_title="Year",
+    yaxis_title="Streams and Views",
+    template="plotly_dark",
+    legend_title="Platforms",
+    hovermode="x unified",
+    xaxis=dict(range=["2015-01-01", "2024-12-31"])
 )
 
-@st.cache_data
-def get_cloned_data():
-    """Load and clean the dataset."""
-    DATA_URL = "https://raw.githubusercontent.com/Schiffen/schiffen_visu/main/data%20project.csv"
-
-    # Fetch the data from the provided URL
-    response = requests.get(DATA_URL)
-    if response.status_code != 200:
-        st.error("Failed to load data from the provided URL.")
-        return None
-
-    # Load the data into a DataFrame
-    raw_data = pd.read_csv(StringIO(response.text))
-    st.write("Column Names in Dataset:", raw_data.columns.tolist())  # Debug: Column names
-    st.write("Sample Raw Data:", raw_data.head(10))  # Debug: First 10 rows of raw data
-
-    # Ensure the required columns are present
-    expected_columns = [
-        'Release.Date', 'Explicit.Track',
-        'Spotify.Streams', 'YouTube.Views', 'TikTok.Views', 'Pandora.Streams'
-    ]
-    missing_columns = [col for col in expected_columns if col not in raw_data.columns]
-    if missing_columns:
-        st.error(f"Missing columns in data: {missing_columns}")
-        return None
-
-    # Clean the data
-    cloned_data = raw_data.copy()
-
-    # Convert Release.Date to datetime and extract Year
-    cloned_data['Release.Date'] = pd.to_datetime(cloned_data['Release.Date'], errors='coerce')
-    cloned_data['Year'] = cloned_data['Release.Date'].dt.year
-
-    # Replace -1 with NaN in the relevant features and ensure numeric conversion
-    features = ['Spotify.Streams', 'YouTube.Views', 'TikTok.Views', 'Pandora.Streams']
-    for feature in features:
-        cloned_data[feature] = cloned_data[feature].replace(-1, pd.NA)  # Replace -1 with NaN
-        cloned_data[feature] = pd.to_numeric(cloned_data[feature], errors='coerce')  # Convert to numeric
-        st.write(f"Sample of {feature} after Cleaning:", cloned_data[feature].head(10))  # Debug: Feature values
-
-    st.write("Cleaned Data Sample:", cloned_data.head(10))  # Debug: Check cleaned data
-
-    return cloned_data
-
-# Load the cleaned data
-data = get_cloned_data()
-
-if data is not None:
-    st.title("🎵 Cultural Evolution of Popularity Dashboard")
-    st.subheader("Streams/Views Over Time by Platform")
-
-    # Filter data for years 2014–2024
-    features = ['Spotify.Streams', 'YouTube.Views', 'TikTok.Views', 'Pandora.Streams']
-    temp_data = data[(data['Year'] >= 2014) & (data['Year'] <= 2024)].copy()
-    st.write("Filtered Data Sample:", temp_data.head(10))  # Debug: Filtered data
-    st.write("Filtered Data Shape:", temp_data.shape)  # Debug: Filtered data shape
-
-    # Prepare grouped data for plotting
-    plot_data = []
-    for feature in features:
-        # Group explicit and non-explicit data by year
-        explicit_grouped = temp_data[temp_data['Explicit.Track'] == 1].groupby('Year')[feature].sum()
-        non_explicit_grouped = temp_data[temp_data['Explicit.Track'] == 0].groupby('Year')[feature].sum()
-
-        st.write(f"Grouped Data for {feature} (Explicit):", explicit_grouped)  # Debug: Explicit data
-        st.write(f"Grouped Data for {feature} (Non-Explicit):", non_explicit_grouped)  # Debug: Non-explicit data
-
-        # Add to plot data
-        plot_data.append(pd.DataFrame({
-            'Year': explicit_grouped.index,
-            'Streams/Views': explicit_grouped.values,
-            'Platform': f"{feature} (Explicit)"
-        }))
-        plot_data.append(pd.DataFrame({
-            'Year': non_explicit_grouped.index,
-            'Streams/Views': non_explicit_grouped.values,
-            'Platform': f"{feature} (Non-Explicit)"
-        }))
-
-    # Combine all platform data into one DataFrame
-    combined_data = pd.concat(plot_data)
-    st.write("Combined Data for Plotting:", combined_data.head(10))  # Debug: Combined data
-    st.write("Combined Data Shape:", combined_data.shape)  # Debug: Combined data shape
-
-    # Adjust Y-axis scaling
-    combined_data.dropna(subset=['Streams/Views'], inplace=True)
-    max_value = combined_data['Streams/Views'].max()
-
-    # Create the plot
-    fig, ax = plt.subplots(figsize=(12, 8))
-    colors = {
-        'Spotify.Streams': 'blue',
-        'YouTube.Views': 'red',
-        'TikTok.Views': 'green',
-        'Pandora.Streams': 'orange'
-    }
-
-    # Plot each platform's data with explicit/non-explicit lines
-    for platform in combined_data['Platform'].unique():
-        platform_data = combined_data[combined_data['Platform'] == platform]
-        linestyle = '-' if 'Explicit' in platform else '--'
-        color = colors[platform.split()[0]]
-        ax.plot(
-            platform_data['Year'],
-            platform_data['Streams/Views'],
-            label=platform,
-            linestyle=linestyle,
-            color=color
-        )
-
-    # Customize the x-axis and y-axis
-    ax.set_xticks(range(2014, 2025))
-    ax.set_xlim(2014, 2024)
-    ax.set_yticks(range(0, int(max_value) + 500_000, 500_000))
-    ax.set_ylim(0, max_value + 500_000)
-
-    # Add title, labels, and legend
-    ax.set_title("Number of Views/Streams by Platform and Explicitness (2014–2024)", fontsize=16)
-    ax.set_xlabel("Year", fontsize=12)
-    ax.set_ylabel("Views/Streams", fontsize=12)
-    ax.legend(fontsize=10)
-    ax.grid(True)
-
-    # Show the plot
-    st.pyplot(fig)
-else:
-    st.error("No data available. Please check the source.")
+# Show the plot
+fig.show()
