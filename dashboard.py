@@ -22,10 +22,8 @@ def get_cloned_data():
 
     # Load the data into a DataFrame
     raw_data = pd.read_csv(StringIO(response.text))
-    st.write("Raw Data Loaded:", raw_data.head())  # Debug: Check raw data
-
-    # Print all column names for debugging
-    st.write("Column Names:", raw_data.columns)
+    st.write("Column Names in Dataset:", raw_data.columns.tolist())  # Debug: Column names
+    st.write("Sample Raw Data:", raw_data.head(10))  # Debug: First 10 rows of raw data
 
     # Ensure the required columns are present
     expected_columns = [
@@ -49,9 +47,9 @@ def get_cloned_data():
     for feature in features:
         cloned_data[feature] = cloned_data[feature].replace(-1, pd.NA)  # Replace -1 with NaN
         cloned_data[feature] = pd.to_numeric(cloned_data[feature], errors='coerce')  # Convert to numeric
-        st.write(f"Sample of {feature} after cleaning:", cloned_data[feature].head())  # Debug: Check feature values
+        st.write(f"Sample of {feature} after Cleaning:", cloned_data[feature].head(10))  # Debug: Feature values
 
-    st.write("Cleaned Data Sample:", cloned_data.head())  # Debug: Check cleaned data
+    st.write("Cleaned Data Sample:", cloned_data.head(10))  # Debug: Check cleaned data
 
     return cloned_data
 
@@ -65,7 +63,8 @@ if data is not None:
     # Filter data for years 2014–2024
     features = ['Spotify.Streams', 'YouTube.Views', 'TikTok.Views', 'Pandora.Streams']
     temp_data = data[(data['Year'] >= 2014) & (data['Year'] <= 2024)].copy()
-    st.write("Filtered Data Sample:", temp_data.head())  # Debug: Check filtered data
+    st.write("Filtered Data Sample:", temp_data.head(10))  # Debug: Filtered data
+    st.write("Filtered Data Shape:", temp_data.shape)  # Debug: Filtered data shape
 
     # Prepare grouped data for plotting
     plot_data = []
@@ -74,8 +73,8 @@ if data is not None:
         explicit_grouped = temp_data[temp_data['Explicit.Track'] == 1].groupby('Year')[feature].sum()
         non_explicit_grouped = temp_data[temp_data['Explicit.Track'] == 0].groupby('Year')[feature].sum()
 
-        st.write(f"Grouped Data for {feature} (Explicit):", explicit_grouped)  # Debug: Check grouping
-        st.write(f"Grouped Data for {feature} (Non-Explicit):", non_explicit_grouped)
+        st.write(f"Grouped Data for {feature} (Explicit):", explicit_grouped)  # Debug: Explicit data
+        st.write(f"Grouped Data for {feature} (Non-Explicit):", non_explicit_grouped)  # Debug: Non-explicit data
 
         # Add to plot data
         plot_data.append(pd.DataFrame({
@@ -91,7 +90,8 @@ if data is not None:
 
     # Combine all platform data into one DataFrame
     combined_data = pd.concat(plot_data)
-    st.write("Combined Data for Plotting:", combined_data.head())  # Debug: Check combined data
+    st.write("Combined Data for Plotting:", combined_data.head(10))  # Debug: Combined data
+    st.write("Combined Data Shape:", combined_data.shape)  # Debug: Combined data shape
 
     # Adjust Y-axis scaling
     combined_data.dropna(subset=['Streams/Views'], inplace=True)
