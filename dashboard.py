@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
 from io import StringIO
 import requests
 
@@ -51,24 +52,52 @@ if data is not None:
     Explore how explicitness correlates with popularity across years on various streaming platforms.
     '''
 
-    # Add some spacing
-    ''
-    ''
+    # Filter the data to the years 2014 to 2024
+    data = data[(data['Year'] >= 2014) & (data['Year'] <= 2024)]
 
-    # Slider for selecting year range
-    min_year = int(data['Year'].min())
-    max_year = int(data['Year'].max())
+    # Filter out rows where stream/view counts are -1 for any feature
+    features = ['Spotify.Streams', 'YouTube.Views', 'TikTok.Views', 'Pandora.Streams']
+    for feature in features:
+        data = data[data[feature] != -1]
 
-    from_year, to_year = st.slider(
-        "Select the year range:",
-        min_value=min_year,
-        max_value=max_year,
-        value=[min_year, max_year]
-    )
+    # Create a plot for each feature
+    st.header("Views/Streams Over Time by Platform")
 
-    # ---------------------------------------------------------------------------
-    # Further visualization or data operations will be added later.
-    # For now, this dashboard establishes the foundational setup for filtering.
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    colors = {
+        'Spotify.Streams': 'blue',
+        'YouTube.Views': 'red',
+        'TikTok.Views': 'green',
+        'Pandora.Streams': 'orange'
+    }
+
+    for feature in features:
+        # Separate explicit and non-explicit tracks
+        explicit_data = data[data['Explicit.Track'] == 1]
+        non_explicit_data = data[data['Explicit.Track'] == 0]
+
+        # Group data by year and sum the views/streams
+        explicit_grouped = explicit_data.groupby('Year')[feature].sum()
+        non_explicit_grouped = non_explicit_data.groupby('Year')[feature].sum()
+
+        # Plot explicit tracks as solid lines
+        ax.plot(explicit_grouped.index, explicit_grouped.values,
+                label=f"{feature} (Explicit)", linestyle='-', color=colors[feature])
+
+        # Plot non-explicit tracks as dashed lines
+        ax.plot(non_explicit_grouped.index, non_explicit_grouped.values,
+                label=f"{feature} (Non-Explicit)", linestyle='--', color=colors[feature])
+
+    # Customize the plot
+    ax.set_title("Number of Views/Streams (2014–2024)", fontsize=14)
+    ax.set_xlabel("Year", fontsize=12)
+    ax.set_ylabel("Views/Streams", fontsize=12)
+    ax.legend(fontsize=10)
+    ax.grid(True)
+
+    # Show the plot
+    st.pyplot(fig)
 
 else:
     st.warning("No data available to display. Please check the data source.")
