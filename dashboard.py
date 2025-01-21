@@ -1,16 +1,34 @@
 import pandas as pd
 import plotly.graph_objects as go
+import streamlit as st
+
+# Set page configuration
+st.set_page_config(
+    page_title="Cultural Evolution of Popularity Dashboard",
+    page_icon=":musical_note:",
+)
 
 # Load and prepare data
 DATA_URL = "https://raw.githubusercontent.com/Schiffen/schiffen_visu/main/data%20project.csv"
 
-# Load data directly from your GitHub repository
+# Attempt to load the data
 try:
     df = pd.read_csv(DATA_URL, encoding='utf-8')
+    st.write("Data loaded successfully!")
 except Exception as e:
-    print(f"Error loading data: {e}")
+    st.error(f"Failed to load data from URL: {e}")
+    df = None
 
-# Ensure column names match expected format
+# Verify the data was loaded
+if df is None:
+    st.stop()
+elif df.empty:
+    st.error("The dataset is empty.")
+    st.stop()
+else:
+    st.write("Data Sample:", df.head(10))
+
+# Ensure critical columns are present
 expected_columns = [
     "Track", "Album.Name", "Artist", "Release.Date", "All.Time.Rank", "Track.Score",
     "Spotify.Streams", "Spotify.Playlist.Count", "Spotify.Playlist.Reach", "Spotify.Popularity",
@@ -19,17 +37,16 @@ expected_columns = [
     "Deezer.Playlist.Count", "Deezer.Playlist.Reach", "Amazon.Playlist.Count", "Pandora.Streams",
     "Pandora.Track.Stations", "Soundcloud.Streams", "Shazam.Counts", "Explicit.Track"
 ]
-
-# Check for missing columns
 missing_columns = [col for col in expected_columns if col not in df.columns]
 if missing_columns:
-    print(f"Warning: Missing columns in dataset - {missing_columns}")
+    st.error(f"Missing columns in dataset: {missing_columns}")
+    st.stop()
 
 # Ensure Release.Date is in datetime format
 df['Release.Date'] = pd.to_datetime(df['Release.Date'], errors='coerce')
 df.set_index('Release.Date', inplace=True)
 
-# Replace -1 with NaN for relevant columns
+# Replace -1 with NaN in numeric columns
 numeric_cols = [
     "Spotify.Streams", "YouTube.Views", "TikTok.Views", "Pandora.Streams"
 ]
@@ -37,14 +54,14 @@ for col in numeric_cols:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors='coerce').replace(-1, pd.NA)
     else:
-        print(f"Warning: Column {col} missing from dataset.")
+        st.warning(f"Column {col} is missing from the dataset.")
 
 # Add aggregated column for other platforms
 other_platforms = ["AirPlay.Spins", "SiriusXM.Spins", "Pandora.Streams", "Deezer.Playlist.Reach", "Soundcloud.Streams"]
 if all(platform in df.columns for platform in other_platforms):
     df["other"] = df[other_platforms].sum(axis=1)
 else:
-    print(f"Warning: One or more columns in {other_platforms} are missing. 'other' column will be incomplete.")
+    st.warning(f"One or more columns in {other_platforms} are missing. 'other' column will be incomplete.")
 
 # Fill NaN values in Explicit.Track with 0 and convert to integer
 df["Explicit.Track"] = df["Explicit.Track"].fillna(0).astype(int)
@@ -126,4 +143,4 @@ fig.update_layout(
 )
 
 # Show the plot
-fig.show()
+st.plotly_chart(fig)
