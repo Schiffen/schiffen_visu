@@ -24,7 +24,10 @@ def get_cloned_data():
     raw_data = pd.read_csv(StringIO(response.text))
     st.write("Raw Data Loaded:", raw_data.head())  # Debug: Check raw data
 
-    # Ensure column names are correct
+    # Print all column names for debugging
+    st.write("Column Names:", raw_data.columns)
+
+    # Ensure the required columns are present
     expected_columns = [
         'Release.Date', 'Explicit.Track',
         'Spotify.Streams', 'YouTube.Views', 'TikTok.Views', 'Pandora.Streams'
@@ -41,11 +44,12 @@ def get_cloned_data():
     cloned_data['Release.Date'] = pd.to_datetime(cloned_data['Release.Date'], errors='coerce')
     cloned_data['Year'] = cloned_data['Release.Date'].dt.year
 
-    # Replace -1 with NaN in the relevant features
+    # Replace -1 with NaN in the relevant features and ensure numeric conversion
     features = ['Spotify.Streams', 'YouTube.Views', 'TikTok.Views', 'Pandora.Streams']
     for feature in features:
-        cloned_data[feature] = pd.to_numeric(cloned_data[feature], errors='coerce')
-        cloned_data[feature] = cloned_data[feature].replace(-1, pd.NA)
+        cloned_data[feature] = cloned_data[feature].replace(-1, pd.NA)  # Replace -1 with NaN
+        cloned_data[feature] = pd.to_numeric(cloned_data[feature], errors='coerce')  # Convert to numeric
+        st.write(f"Sample of {feature} after cleaning:", cloned_data[feature].head())  # Debug: Check feature values
 
     st.write("Cleaned Data Sample:", cloned_data.head())  # Debug: Check cleaned data
 
