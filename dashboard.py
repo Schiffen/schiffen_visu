@@ -39,25 +39,37 @@ if data is not None:
     st.title("🎵 Cultural Evolution of Popularity Dashboard")
     st.subheader("Streams/Views Over Time by Platform")
 
-    # Filter by years 2014–2024 and relevant features
+    # Filter data for years 2014–2024
     features = ['Spotify.Streams', 'YouTube.Views', 'TikTok.Views', 'Pandora.Streams']
     temp_data = data[(data['Year'] >= 2014) & (data['Year'] <= 2024)].copy()
 
-    # Drop rows with -1 or NaN in the relevant features
+    # Replace -1 with NaN and drop missing values for each feature separately
     for feature in features:
-        temp_data = temp_data[temp_data[feature] != -1]
-    temp_data.dropna(subset=['Year', *features], inplace=True)
+        temp_data[feature] = temp_data[feature].replace(-1, pd.NA)
 
-    # Calculate the maximum value for the y-axis
-    max_value = 0
+    # Prepare grouped data for plotting
+    plot_data = []
     for feature in features:
-        max_value = max(
-            max_value,
-            temp_data[temp_data['Explicit.Track'] == 1].groupby('Year')[feature].sum().max(),
-            temp_data[temp_data['Explicit.Track'] == 0].groupby('Year')[feature].sum().max()
-        )
+        # Group explicit and non-explicit data by year, summing up streams/views
+        explicit_grouped = temp_data[temp_data['Explicit.Track'] == 1].groupby('Year')[feature].sum()
+        non_explicit_grouped = temp_data[temp_data['Explicit.Track'] == 0].groupby('Year')[feature].sum()
 
-    # Prepare the plot
+        # Store results in a structured DataFrame for plotting
+        plot_data.append(pd.DataFrame({
+            'Year': explicit_grouped.index,
+            'Streams/Views': explicit_grouped.values,
+            'Platform': f"{feature} (Explicit)"
+        }))
+        plot_data.append(pd.DataFrame({
+            'Year': non_explicit_grouped.index,
+            'Streams/Views': non_explicit_grouped.values,
+            'Platform': f"{feature} (Non-Explicit)"
+        }))
+
+    # Combine all platform data into one DataFrame
+    combined_data = pd.concat(plot_data)
+
+    # Create the plot
     fig, ax = plt.subplots(figsize=(12, 8))
     colors = {
         'Spotify.Streams': 'blue',
@@ -66,29 +78,30 @@ if data is not None:
         'Pandora.Streams': 'orange'
     }
 
-    for feature in features:
-        # Group by year for explicit tracks
-        explicit_data = temp_data[temp_data['Explicit.Track'] == 1].groupby('Year')[feature].sum()
-        non_explicit_data = temp_data[temp_data['Explicit.Track'] == 0].groupby('Year')[feature].sum()
-
-        # Plot explicit tracks
+    # Plot each platform's data with explicit/non-explicit lines
+    for platform in combined_data['Platform'].unique():
+        platform_data = combined_data[combined_data['Platform'] == platform]
+        linestyle = '-' if 'Explicit' in platform else '--'
+        color = colors[platform.split()[0]]
         ax.plot(
-            explicit_data.index, explicit_data.values,
-            label=f"{feature} (Explicit)", linestyle='-', color=colors[feature]
+            platform_data['Year'],
+            platform_data['Streams/Views'],
+            label=platform,
+            linestyle=linestyle,
+            color=color
         )
 
-        # Plot non-explicit tracks
-        ax.plot(
-            non_explicit_data.index, non_explicit_data.values,
-            label=f"{feature} (Non-Explicit)", linestyle='--', color=colors[feature]
-        )
+    # Customize the x-axis and y-axis
+    ax.set_xticks(range(2014, 2025))  # Ensure years from 2014 to 2024
+    ax.set_xlim(2014, 2024)
+    max_value = combined_data['Streams/Views'].max()
+    ax.set_yticks(range(0, int(max_value) + 500_000, 500_000))
+    ax.set_ylim(0, max_value + 500_000)
 
-    # Customize the plot
+    # Add title, labels, and legend
     ax.set_title("Number of Views/Streams by Platform and Explicitness (2014–2024)", fontsize=16)
     ax.set_xlabel("Year", fontsize=12)
     ax.set_ylabel("Views/Streams", fontsize=12)
-    ax.set_xticks(range(2014, 2025))  # Set x-axis ticks to show only 2014–2024
-    ax.set_yticks(range(0, int(max_value) + 500_000, 500_000))  # Y-axis increments
     ax.legend(fontsize=10)
     ax.grid(True)
 
